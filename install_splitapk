@@ -1,0 +1,62 @@
+#! /usr/bin/env python3
+
+"""
+Script for installing split apks that have a structure such as:
+
+ls com.example.app
+appicon_193.png 
+config.arm64_v8a-193.apk 
+config.en-193.apk
+com.example.app-193.apk
+...
+
+The script uses the folder containing the apks, so com.example.app from
+the example above, and the device retrieved using `adb devices -l`:
+
+List of devices attached
+emulator-5556          device product:sdk_gphone_arm64 model:Android_SDK_built_for_arm64 device:generic_arm64 transport_id:1
+
+install_splitapk 1 com.example.app
+"""
+
+import re
+import shlex
+import subprocess
+import sys
+
+dev = sys.argv[1]
+apk = sys.argv[2]
+
+if not dev or not apk:
+    print("install_splitapk DEV APK")
+    sys.exit(1)
+
+def run(command):
+    cmd = shlex.split(command)
+    return subprocess.check_output(cmd)
+
+run(f"adb -t {dev} push {apk} /data/local/tmp")
+data = run(f"adb -t {dev} shell ls -l /data/local/tmp/{apk}").decode('utf8')
+
+expr = re.compile('^(.*?)\s+(.*?)\s+(.*?)\s+(.*?)\s+(\d+)\s(.*?)\s(.*?)\s(.*?)$')
+
+apks = []
+size = 0
+
+for line in data.splitlines():
+    if 'apk' not in line:
+        continue
+    result = expr.match(line)
+    if result:
+        size += int(result.group(5))
+        apks.append((result.group(5),result.group(8)))
+
+
+data = run(f"adb -t {dev} shell pm install-create -S {size}")
+in_id = re.search('\[(.*?)\]', data.decode('utf8')).group(1)
+run(f"adb -t {dev} shell pm install-create -S {size}")
+
+for i, a in enumerate(apks):
+    run(f"adb -t {dev} shell pm install-write -S {a[0]} {in_id} {i} /data/local/tmp/{apk}/{a[1]}")
+
+run(f"adb -t {dev} shell pm install-commit {in_id}")
