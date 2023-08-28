@@ -54,7 +54,6 @@ for line in data.splitlines():
 
 data = run(f"adb -t {dev} shell pm install-create -S {size}")
 in_id = re.search('\[(.*?)\]', data.decode('utf8')).group(1)
-run(f"adb -t {dev} shell pm install-create -S {size}")
 
 for i, a in enumerate(apks):
     run(f"adb -t {dev} shell pm install-write -S {a[0]} {in_id} {i} /data/local/tmp/{apk}/{a[1]}")
